@@ -1,2 +1,9 @@
 fastapi
-uvicorn[standard]
+uvicorn
+pydantic
+pandas
+numpy
+scikit-learn
+kagglehub
+seaborn
+matplotlib
