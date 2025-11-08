@@ -4,11 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-from .song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor
+from song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-from .data_structures import *
+from data_structures import *
 
 import kagglehub
 
@@ -279,4 +279,4 @@ async def predict_similar_songs(req: PredictRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info", reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, log_level="info", reload=True)

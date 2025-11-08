@@ -1,4 +1,4 @@
-"use client"; #this might need to get deleted
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 
