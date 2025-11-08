@@ -34,15 +34,22 @@ class cosine_similarity:
         return dot_product / (magnitude1 * magnitude2)
 
 class SongMatcher:
-    def __init__(self, target_song, candidate_songs):
+    def __init__(self, target_song, candidate_songs, artist_weight=0.1):
         self.target_song = target_song
         self.candidate_songs = candidate_songs
+        self.artist_weight = artist_weight  # Bonus for same artist
 
     def match(self, top_k=5):
         heap = MinHeap(max_size=top_k)
 
         for candidate in self.candidate_songs:
+            # Compute base cosine similarity
             sim = cosine_similarity(self.target_song, candidate).compute()
+
+            # Add artist bonus: if same artist, boost similarity
+            if self.target_song.artist == candidate.artist:
+                sim = min(1.0, sim + self.artist_weight)  # Cap at 1.0
+
             heap.insert(sim, candidate)
 
         results = []

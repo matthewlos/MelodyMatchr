@@ -13,48 +13,34 @@ export default function Home() {
 
     setIsSearching(true);
 
-    // TODO: Replace this setTimeout with actual API call
-    // Call your FastAPI backend at http://localhost:8000/recommend
-    // Example:
-    // try {
-    //   const response = await fetch('http://localhost:8000/recommend', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ song_name: songName, top_k: 3 })
-    //   });
-    //   const data = await response.json();
-    //   setResults(data);
-    // } catch (error) {
-    //   console.error('Error:', error);
-    //   alert('Could not find song or connect to server');
-    // } finally {
-    //   setIsSearching(false);
-    // }
-
-    // Fake data for now
-    setTimeout(() => {
-      setResults({
-        searchedSong: songName,
-        matches: [
-          {
-            name: "Shape of You",
-            artist: "Ed Sheeran",
-            similarity: 0.92,
-          },
-          {
-            name: "Levitating",
-            artist: "Dua Lipa",
-            similarity: 0.88,
-          },
-          {
-            name: "Starboy",
-            artist: "The Weeknd",
-            similarity: 0.85,
-          },
-        ],
+    try {
+      // Call the /search endpoint with the song name
+      const response = await fetch('http://localhost:8000/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          song_name: songName,
+          top_k: 3
+        })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch recommendations');
+      }
+
+      const data = await response.json();
+      setResults({
+        searchedSong: data.searched_song.name,
+        searchedArtist: data.searched_song.artist,
+        matches: data.matches || []
+      });
+    } catch (error: any) {
+      console.error('Error:', error);
+      alert(error.message || 'Could not find song or connect to server. Make sure FastAPI is running on port 8000.');
+    } finally {
       setIsSearching(false);
-    }, 800);
+    }
   };
 
   return (
@@ -99,9 +85,12 @@ export default function Home() {
         {/* Results */}
         {results && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-6">
-              Top 3 Recommendations for "{results.searchedSong}"
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
+              Top 3 Recommendations for
             </h2>
+            <p className="text-lg text-purple-600 dark:text-purple-400 mb-6">
+              &quot;{results.searchedSong}&quot; by {results.searchedArtist}
+            </p>
 
             <div className="space-y-4">
               {results.matches.map((match: any, index: number) => (
