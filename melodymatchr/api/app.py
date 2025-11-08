@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-from song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor
+from song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor,SongMatcherHashTable
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
@@ -90,6 +90,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# song finder to handle duplicate titles
+def find_song_smart(query: str, song_database, song_name_bst):
+   
+    query = query.lower().strip()
+    
+    # Check if query contains " - " (song - artist format)
+    if " - " in query:
+        parts = query.split(" - ", 1)
+        song_part = parts[0].strip()
+        artist_part = parts[1].strip()
+        
+        # Search for match with both song and artist
+        for song in song_database:
+            if (song_part in song.name.lower() and 
+                artist_part in song.artist.lower()):
+                return song
+        
+        # If no match with artist, try just song name
+        query = song_part
+    
+    # Try exact match using BST first
+    target_song = song_name_bst.search(query)
+    
+    # If no exact match, find partial matches
+    if not target_song:
+        for song in song_database:
+            if query in song.name.lower():
+                return song
+    
+    return target_song
+
 class SongModel(BaseModel):
     id: Optional[str] = None
     name: Optional[str] = None
@@ -135,7 +166,7 @@ async def search_hashtable(req: SearchRequest):
         raise HTTPException(status_code=400, detail="Song name cannot be empty")
 
     # Try exact match using BST first (O(log n))
-    target_song = song_name_bst.search(query)
+    target_song = find_song_smart(query, song_database, song_name_bst)
 
     # If no exact match, fall back to partial match using linear search
     if not target_song:
@@ -209,7 +240,7 @@ async def search(req: SearchRequest):
         raise HTTPException(status_code=400, detail="Song name cannot be empty")
 
     # Try exact match using BST first (O(log n))
-    target_song = song_name_bst.search(query)
+    target_song = find_song_smart(query, song_database, song_name_bst)
 
     # If no exact match, fall back to partial match using linear search
     if not target_song:

@@ -8,6 +8,10 @@ export default function Home() {
   const [results, setResults] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  
+  // State for data structure selection
+  const [dataStructure, setDataStructure] = useState<"minheap" | "hashtable">("minheap");
+  
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -68,16 +72,19 @@ export default function Home() {
     };
   }, [songName]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = async () => {
     if (!songName.trim()) return;
 
     setIsSearching(true);
     setShowSuggestions(false);
 
     try {
-      // Call the /search endpoint with the song name
-      const response = await fetch('http://localhost:8000/search', {
+      // MODIFIED: Choose endpoint based on selected data structure
+      const endpoint = dataStructure === "hashtable" 
+        ? 'http://localhost:8000/search/hashtable'
+        : 'http://localhost:8000/search';
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +102,8 @@ export default function Home() {
       setResults({
         searchedSong: data.searched_song.name,
         searchedArtist: data.searched_song.artist,
-        matches: data.matches || []
+        matches: data.matches || [],
+        dataStructure: dataStructure
       });
     } catch (error: any) {
       console.error('Error:', error);
@@ -105,8 +113,9 @@ export default function Home() {
     }
   };
 
-  const handleSuggestionClick = (suggestion: any) => {
-    setSongName(suggestion.name);
+ const handleSuggestionClick = (suggestion: any) => {
+    // Fill in "Song Name - Artist Name" format to handle duplicates
+    setSongName(`${suggestion.name} - ${suggestion.artist}`);
     setShowSuggestions(false);
   };
 
@@ -125,7 +134,7 @@ export default function Home() {
 
         {/* Search Box */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 mb-8">
-          <form onSubmit={handleSearch}>
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Enter a song name
             </label>
@@ -137,13 +146,14 @@ export default function Home() {
                   value={songName}
                   onChange={(e) => setSongName(e.target.value)}
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   placeholder="e.g., Blinding Lights"
                   className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   disabled={isSearching}
                   autoComplete="off"
                 />
                 <button
-                  type="submit"
+                  onClick={handleSearch}
                   disabled={isSearching || !songName.trim()}
                   className="px-8 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
@@ -175,12 +185,66 @@ export default function Home() {
                 </div>
               )}
             </div>
-          </form>
+
+            {/* Data Structure Selector */}
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Algorithm Selection
+              </label>
+              
+              {/* Toggle Switch Option */}
+              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setDataStructure("minheap")}
+                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
+                    dataStructure === "minheap"
+                      ? "bg-purple-600 text-white shadow-lg"
+                      : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-500"
+                  }`}
+                >
+                  <div className="text-lg">MinHeap</div>
+                  <div className="text-xs opacity-80 mt-1">O(n log k)</div>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => setDataStructure("hashtable")}
+                  className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
+                    dataStructure === "hashtable"
+                      ? "bg-purple-600 text-white shadow-lg"
+                      : "bg-white dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-500"
+                  }`}
+                >
+                  <div className="text-lg">HashTable</div>
+                  <div className="text-xs opacity-80 mt-1">O(n + k log k)</div>
+                </button>
+              </div>
+
+              {/* Info text about selected algorithm */}
+              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                {dataStructure === "minheap" 
+                  ? "MinHeap maintains top-k items efficiently with minimal memory usage"
+                  : "HashTable provides faster retrieval by bucketing similarity scores"}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Results */}
         {results && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+            {/* Algorithm Badge */}
+            <div className="mb-4">
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                results.dataStructure === "hashtable"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                  : "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+              }`}>
+                {results.dataStructure === "hashtable" ? "HashTable Algorithm" : "MinHeap Algorithm"}
+              </span>
+            </div>
+
             <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-2">
               Top 3 Recommendations for
             </h2>
@@ -213,7 +277,7 @@ export default function Home() {
                     {/* Similarity Score */}
                     <div className="text-right">
                       <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {(match.similarity * 100).toFixed(1)}%
+                        {Math.round(match.similarity * 100)}%
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
                         Match
