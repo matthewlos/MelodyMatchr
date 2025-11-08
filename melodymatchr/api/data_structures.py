@@ -193,3 +193,40 @@ def binary_search_range(sorted_array, min_val, max_val, key_func=lambda x: x):
     end_idx = left
 
     return sorted_array[start_idx:end_idx]
+
+#Added For improved search functionality **(optional)** DELETE or FIX if broken
+
+class TrieNode:
+    def __init__(self):
+        self.children = {}
+        self.is_end = False
+        self.songs = []  # Store song objects that match this prefix
+
+class SongSearchTrie:
+    def __init__(self):
+        self.root = TrieNode()
+    
+    def insert(self, song):
+        """Insert song name for autocomplete"""
+        name = song.name.lower()
+        node = self.root
+        
+        for char in name:
+            if char not in node.children:
+                node.children[char] = TrieNode()
+            node = node.children[char]
+            node.songs.append(song)  # Add to all prefix nodes
+        
+        node.is_end = True
+    
+    def search_prefix(self, prefix, max_results=10):
+        """Return songs matching the prefix"""
+        prefix = prefix.lower()
+        node = self.root
+        
+        for char in prefix:
+            if char not in node.children:
+                return []
+            node = node.children[char]
+        
+        return node.songs[:max_results]

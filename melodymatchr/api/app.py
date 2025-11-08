@@ -4,11 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-from song_similarity import Song as SongClass, cosine_similarity, SongMatcher
+from .song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-from data_structures import *
+from .data_structures import *
 
 import kagglehub
 
@@ -46,7 +46,7 @@ df_clean = df[['track_id', 'track_name', 'artists'] + all_feature_cols].copy()
 # Create a list of Song objects for easy access
 song_database = []
 song_name_bst = BST()  # BST for fast song name lookups
-
+search_trie = SongSearchTrie() #Trie for prefix search
 # Create BSTs indexed by key features for efficient range filtering
 # Using composite score (average of danceability, energy, valence)
 feature_bst = BST()  # BST indexed by composite feature score
@@ -68,9 +68,13 @@ for idx, row in df_clean.iterrows():
     # Index by composite feature score (danceability + energy + valence average)
     composite_score = (features[0] + features[1] + features[9]) / 3.0
     feature_bst.insert(composite_score, song_obj)
+    #Insert into trie for prefix search
+    search_trie.insert(song_obj)
 
 print(f"Indexed {len(song_database)} songs with BST feature indexing")
 
+#Initialize song predictor
+song_predictor = SongPredictor(song_database)
 
 app = FastAPI(title="MelodyMatchr API",
               description="Simple endpoints for computing song similarity and matching",
@@ -107,6 +111,14 @@ class SearchRequest(BaseModel):
 def to_internal_song(m: SongModel) -> SongClass:
     return SongClass(song_id=m.id, name=m.name or "", artist=m.artist or "", features=m.features)
 
+class PrefixSearchRequest(BaseModel):
+    query: str
+    max_results: Optional[int] = 5
+
+class PredictRequest(BaseModel):
+    song: SongModel
+    tolerance: Optional[float] = 0.1
+    top_k: Optional[int] = 5
 
 @app.get("/health")
 async def health():
@@ -217,8 +229,54 @@ async def search(req: SearchRequest):
         "matches": matches
     }
 
+@app.post("/search/prefix")
+async def prefix_search(req: PrefixSearchRequest):
+    """
+    Search for songs by prefix using Trie data structure.
+    Returns songs whose names start with the given query string.
+    """
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+    
+    results = search_trie.search_prefix(req.query, max_results=req.max_results or 5)
+    
+    return {
+        "query": req.query,
+        "results": [
+            {"id": song.id, "name": song.name, "artist": song.artist} 
+            for song in results
+        ]
+    }
+
+
+# NEW: Predict similar songs endpoint
+@app.post("/predict")
+async def predict_similar_songs(req: PredictRequest):
+    """
+    Predict similar songs based on features using the SongPredictor.
+    """
+    target = to_internal_song(req.song)
+    
+    results = song_predictor.predict_similar(
+        target, 
+        tolerance=req.tolerance or 0.1,
+        top_k=req.top_k or 5
+    )
+    
+    return {
+        "predictions": [
+            {
+                "id": song.id,
+                "name": song.name,
+                "artist": song.artist,
+                "similarity": score
+            }
+            for score, song in results
+        ]
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, log_level="info", reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="info", reload=True)

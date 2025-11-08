@@ -1,17 +1,79 @@
-"use client";
+"use client"; #this might need to get deleted
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function Home() {
   const [songName, setSongName] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Autocomplete with prefix search
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    const fetchSuggestions = async () => {
+      if (songName.trim().length < 2) {
+        setSuggestions([]);
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:8000/search/prefix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: songName,
+            max_results: 5
+          }),
+          signal: controller.signal
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setSuggestions(data.results || []);
+          setShowSuggestions(true);
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error('Autocomplete error:', error);
+        }
+      }
+    };
+
+    const debounceTimer = setTimeout(fetchSuggestions, 300);
+    return () => {
+      clearTimeout(debounceTimer);
+      controller.abort();
+    };
+  }, [songName]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!songName.trim()) return;
 
     setIsSearching(true);
+    setShowSuggestions(false);
 
     try {
       // Call the /search endpoint with the song name
@@ -43,6 +105,11 @@ export default function Home() {
     }
   };
 
+  const handleSuggestionClick = (suggestion: any) => {
+    setSongName(suggestion.name);
+    setShowSuggestions(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <main className="w-full max-w-2xl">
@@ -52,7 +119,7 @@ export default function Home() {
             MelodyMatchr
           </h1>
           <p className="text-lg text-gray-700 dark:text-gray-300">
-            Find similar songs instantly
+            Find similar songs instantly with smart autocomplete
           </p>
         </div>
 
@@ -62,22 +129,51 @@ export default function Home() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Enter a song name
             </label>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={songName}
-                onChange={(e) => setSongName(e.target.value)}
-                placeholder="e.g., Blinding Lights"
-                className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                disabled={isSearching}
-              />
-              <button
-                type="submit"
-                disabled={isSearching || !songName.trim()}
-                className="px-8 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                {isSearching ? "Searching..." : "Search"}
-              </button>
+            <div className="relative">
+              <div className="flex gap-3">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={songName}
+                  onChange={(e) => setSongName(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  placeholder="e.g., Blinding Lights"
+                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                  disabled={isSearching}
+                  autoComplete="off"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearching || !songName.trim()}
+                  className="px-8 py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSearching ? "Searching..." : "Search"}
+                </button>
+              </div>
+
+              {/* Autocomplete Suggestions */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div 
+                  ref={suggestionsRef}
+                  className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-700 rounded-lg shadow-xl border border-gray-200 dark:border-gray-600 max-h-60 overflow-y-auto"
+                >
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-purple-50 dark:hover:bg-gray-600 border-b border-gray-100 dark:border-gray-600 last:border-b-0 transition-colors"
+                    >
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {suggestion.name}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {suggestion.artist}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </form>
         </div>
