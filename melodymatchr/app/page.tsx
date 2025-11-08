@@ -213,7 +213,7 @@ export default function Home() {
                     {/* Similarity Score */}
                     <div className="text-right">
                       <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                        {Math.round(match.similarity * 100)}%
+                        {(match.similarity * 100).toFixed(1)}%
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400">
                         Match

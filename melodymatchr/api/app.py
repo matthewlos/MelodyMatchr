@@ -95,14 +95,6 @@ class SongModel(BaseModel):
     name: Optional[str] = None
     artist: Optional[str] = None
     features: List[float]
-class SimilarityRequest(BaseModel):
-    song1: SongModel
-    song2: SongModel
-
-class MatchRequest(BaseModel):
-    target: SongModel
-    candidates: List[SongModel]
-    top_k: Optional[int] = 5
 
 class SearchRequest(BaseModel):
     song_name: str
@@ -125,44 +117,21 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/similarity")
-async def similarity(req: SimilarityRequest):
-    s1 = to_internal_song(req.song1)
-    s2 = to_internal_song(req.song2)
-    sim = cosine_similarity(s1, s2).compute()
-    return {"similarity": sim}
+## TODO: Add HashTable Search Endpoint above the MinHeap ones here ##
 
+## HashTable Search Endpoint
 
-@app.post("/match")
-async def match(req: MatchRequest):
-    target = to_internal_song(req.target)
-    candidates = [to_internal_song(c) for c in req.candidates]
+# Uses the HashTableTopK data structure to find top-k similar songs.
 
-    top_k = max(1, int(req.top_k or 5))
+## END ##
 
-    # Use SongMatcher class from song_similarity.py
-    matcher = SongMatcher(target, candidates)
-    results = matcher.match(top_k=top_k)
-
-    # Format results
-    matches = []
-    for similarity, song in results:
-        matches.append({
-            "id": song.id,
-            "name": song.name,
-            "artist": song.artist,
-            "similarity": similarity
-        })
-
-    return {"matches": matches}
-
-
+## This is the endpoint for MinHeap based top k search ##
 @app.post("/search")
 async def search(req: SearchRequest):
-    """
-    Search for a song by name and return top K similar songs from the database.
-    Uses BST for exact match lookup, falls back to linear search for partial matches.
-    """
+
+    # Search for a song by name and return top K similar songs from the database.
+    # Uses BST for exact match lookup, falls back to linear search for partial matches.
+
     query = req.song_name.lower().strip()
 
     if not query:
@@ -229,12 +198,16 @@ async def search(req: SearchRequest):
         "matches": matches
     }
 
+
+
+## Prediction endpoint, I don't think we need HashTable version for Predictor ##
+
 @app.post("/search/prefix")
 async def prefix_search(req: PrefixSearchRequest):
-    """
-    Search for songs by prefix using Trie data structure.
-    Returns songs whose names start with the given query string.
-    """
+
+    # Search for songs by prefix using Trie data structure.
+    # Returns songs whose names start with the given query string.
+
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     
@@ -247,7 +220,6 @@ async def prefix_search(req: PrefixSearchRequest):
             for song in results
         ]
     }
-
 
 # NEW: Predict similar songs endpoint
 @app.post("/predict")

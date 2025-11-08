@@ -230,3 +230,74 @@ class SongSearchTrie:
             node = node.children[char]
         
         return node.songs[:max_results]
+
+
+# Hash Table for Top-K 
+class HashTableTopK:
+    # Hash Table-based data structure for finding top-k items.
+    # Time Complexity:
+      # - Insert: O(1) average - hash to bucket and append
+      # - Get top-k: O(n + k log k) - scan buckets from high to low, sort within buckets
+    # Space Complexity: O(n) - stores all items
+
+    def __init__(self, num_buckets=100):
+        self.num_buckets = num_buckets
+        # Hash table: dictionary mapping bucket index to list of (similarity, song) tuples
+        self.buckets = {}
+        self.size = 0
+
+    def _hash(self, similarity):
+       
+        bucket_index = int(similarity * self.num_buckets)
+        # Handle edge case where similarity = 1.0
+        if bucket_index >= self.num_buckets:
+            bucket_index = self.num_buckets - 1
+        return bucket_index
+
+    def insert(self, similarity, song_data):
+        ### Insert a song with its similarity score into the hash table.
+
+        ### Time Complexity: O(1) average
+
+        bucket_index = self._hash(similarity)
+
+        # Create bucket if it doesn't exist
+        if bucket_index not in self.buckets:
+            self.buckets[bucket_index] = []
+
+        # Append to bucket (chaining for collision resolution)
+        self.buckets[bucket_index].append((similarity, song_data))
+        self.size += 1
+
+    def get_top_k(self, k):
+        # retrieve top-k items with highest similarity scores
+        results = []
+
+        # Iterate from highest bucket to lowest
+        for bucket_index in range(self.num_buckets - 1, -1, -1):
+            if bucket_index in self.buckets:
+                # Add all items from this bucket
+                results.extend(self.buckets[bucket_index])
+
+                # Early termination: if we have enough items
+                if len(results) >= k:
+                    # Sort collected items and return top k
+                    results.sort(key=lambda x: x[0], reverse=True)
+                    return results[:k]
+
+        # If we collected fewer than k items, sort and return all
+        results.sort(key=lambda x: x[0], reverse=True)
+        return results
+
+    def get_all_sorted(self):
+        # gets songs with highest similarity in sorted order
+        all_items = []
+        for bucket in self.buckets.values():
+            all_items.extend(bucket)
+
+        all_items.sort(key=lambda x: x[0], reverse=True)
+        return all_items
+
+    def __len__(self):
+        # num items in hash table
+        return self.size
