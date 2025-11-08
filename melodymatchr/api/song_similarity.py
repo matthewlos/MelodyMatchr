@@ -60,14 +60,23 @@ class SongMatcher:
 
 # TODO: Implement HashTable version  of above SongMatcher for faster top-k retrieval #
 
-
-
-
-
-
-
-
-
+class SongMatcherHashTable:
+    
+    # HashTable implementation for finding top-k similar songs.
+    # Time: O(n + k log k), Space: O(n)
+    
+    def __init__(self, target_song, candidate_songs):
+        self.target_song = target_song
+        self.candidate_songs = candidate_songs
+    
+    def match(self, top_k=5):
+        hash_table = HashTableTopK(num_buckets=100)
+        for candidate in self.candidate_songs:
+            sim = cosine_similarity(self.target_song, candidate).compute()
+            hash_table.insert(sim, candidate)
+        
+        return hash_table.get_top_k(top_k)
+    
 # END Implement HashTable version (We don't need to implement HashTable version for the Predictor) #
 
 # This is for the pridictive typing feature if fails DELETE or FIX 
