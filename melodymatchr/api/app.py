@@ -2,9 +2,9 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import time
 
-
-from song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongPredictor,SongMatcherHashTable
+from song_similarity import Song as SongClass, cosine_similarity, SongMatcher, SongMatcherHashTable
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
@@ -73,9 +73,6 @@ for idx, row in df_clean.iterrows():
 
 print(f"Indexed {len(song_database)} songs with BST feature indexing")
 
-#Initialize song predictor
-song_predictor = SongPredictor(song_database)
-
 app = FastAPI(title="MelodyMatchr API",
               description="Simple endpoints for computing song similarity and matching",
               version="0.1")
@@ -121,28 +118,17 @@ def find_song_smart(query: str, song_database, song_name_bst):
     
     return target_song
 
-class SongModel(BaseModel):
-    id: Optional[str] = None
-    name: Optional[str] = None
-    artist: Optional[str] = None
-    features: List[float]
-
+# Search request model
 class SearchRequest(BaseModel):
     song_name: str
     top_k: Optional[int] = 3
 
-def to_internal_song(m: SongModel) -> SongClass:
-    return SongClass(song_id=m.id, name=m.name or "", artist=m.artist or "", features=m.features)
-
+# Prefix search request model
 class PrefixSearchRequest(BaseModel):
     query: str
     max_results: Optional[int] = 5
 
-class PredictRequest(BaseModel):
-    song: SongModel
-    tolerance: Optional[float] = 0.1
-    top_k: Optional[int] = 5
-
+# Health check endpoint
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -156,10 +142,12 @@ async def health():
 
 @app.post("/search/hashtable")
 async def search_hashtable(req: SearchRequest):
-    
+
     # Search for a song by name and return top K similar songs from the database.
     # Uses HashTable-based matching for faster top-k retrieval.
-    
+
+    start_time = time.time()
+
     query = req.song_name.lower().strip()
 
     if not query:
@@ -202,6 +190,7 @@ async def search_hashtable(req: SearchRequest):
 
     top_k = max(1, int(req.top_k or 3))
 
+    # Main Data Structure Implementation
     # Use SongMatcherHashTable class from song_similarity.py on filtered candidates
     matcher = SongMatcherHashTable(target_song, candidates)
     results = matcher.match(top_k=top_k)
@@ -216,13 +205,19 @@ async def search_hashtable(req: SearchRequest):
             "similarity": similarity
         })
 
+    ## Calculate execution time ##
+    end_time = time.time()
+    execution_time = (end_time - start_time) * 1000  
+
+    # Return response
     return {
         "searched_song": {
             "id": target_song.id,
             "name": target_song.name,
             "artist": target_song.artist
         },
-        "matches": matches
+        "matches": matches,
+        "execution_time_ms": round(execution_time, 2)
     }
 
 ## END ##
@@ -233,6 +228,8 @@ async def search(req: SearchRequest):
 
     # Search for a song by name and return top K similar songs from the database.
     # Uses BST for exact match lookup, falls back to linear search for partial matches.
+
+    start_time = time.time()
 
     query = req.song_name.lower().strip()
 
@@ -277,6 +274,7 @@ async def search(req: SearchRequest):
 
     top_k = max(1, int(req.top_k or 3))
 
+    # Main Data Structure Implementation
     # Use SongMatcher class from song_similarity.py on filtered candidates
     matcher = SongMatcher(target_song, candidates)
     results = matcher.match(top_k=top_k)
@@ -291,19 +289,22 @@ async def search(req: SearchRequest):
             "similarity": similarity
         })
 
+    ## Calculate execution time ##
+    end_time = time.time()
+    execution_time = (end_time - start_time) * 1000  
+
+    # Return response
     return {
         "searched_song": {
             "id": target_song.id,
             "name": target_song.name,
             "artist": target_song.artist
         },
-        "matches": matches
+        "matches": matches,
+        "execution_time_ms": round(execution_time, 2)
     }
 
-
-
-## Prediction endpoint, I don't think we need HashTable version for Predictor ##
-
+# Prefix search endpoint; Uses Trie data structure
 @app.post("/search/prefix")
 async def prefix_search(req: PrefixSearchRequest):
 
@@ -315,6 +316,7 @@ async def prefix_search(req: PrefixSearchRequest):
     
     results = search_trie.search_prefix(req.query, max_results=req.max_results or 5)
     
+    # Format results
     return {
         "query": req.query,
         "results": [
@@ -322,33 +324,6 @@ async def prefix_search(req: PrefixSearchRequest):
             for song in results
         ]
     }
-
-# NEW: Predict similar songs endpoint
-@app.post("/predict")
-async def predict_similar_songs(req: PredictRequest):
-    """
-    Predict similar songs based on features using the SongPredictor.
-    """
-    target = to_internal_song(req.song)
-    
-    results = song_predictor.predict_similar(
-        target, 
-        tolerance=req.tolerance or 0.1,
-        top_k=req.top_k or 5
-    )
-    
-    return {
-        "predictions": [
-            {
-                "id": song.id,
-                "name": song.name,
-                "artist": song.artist,
-                "similarity": score
-            }
-            for score, song in results
-        ]
-    }
-
 
 if __name__ == "__main__":
     import uvicorn

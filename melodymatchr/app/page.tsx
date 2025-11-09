@@ -8,9 +8,12 @@ export default function Home() {
   const [results, setResults] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
+
   // State for data structure selection
   const [dataStructure, setDataStructure] = useState<"minheap" | "hashtable">("minheap");
+
+  // State for top_k slider
+  const [topK, setTopK] = useState(3);
   
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +46,7 @@ export default function Home() {
       }
 
       try {
+        // Fetch suggestions from backend
         const response = await fetch('http://localhost:8000/search/prefix', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -52,7 +56,7 @@ export default function Home() {
           }),
           signal: controller.signal
         });
-
+        // verify response
         if (response.ok) {
           const data = await response.json();
           setSuggestions(data.results || []);
@@ -64,7 +68,7 @@ export default function Home() {
         }
       }
     };
-
+    // Debounce fetch
     const debounceTimer = setTimeout(fetchSuggestions, 300);
     return () => {
       clearTimeout(debounceTimer);
@@ -75,6 +79,7 @@ export default function Home() {
   const handleSearch = async () => {
     if (!songName.trim()) return;
 
+    // Clear previous results
     setIsSearching(true);
     setShowSuggestions(false);
 
@@ -84,12 +89,13 @@ export default function Home() {
         ? 'http://localhost:8000/search/hashtable'
         : 'http://localhost:8000/search';
 
+      // Fetch recommendations from backend
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           song_name: songName,
-          top_k: 3
+          top_k: topK
         })
       });
 
@@ -99,12 +105,15 @@ export default function Home() {
       }
 
       const data = await response.json();
+      // Update results state
       setResults({
         searchedSong: data.searched_song.name,
         searchedArtist: data.searched_song.artist,
         matches: data.matches || [],
-        dataStructure: dataStructure
+        dataStructure: dataStructure,
+        executionTime: data.execution_time_ms || 0
       });
+      // check if no matches found / invalid song / error
     } catch (error: any) {
       console.error('Error:', error);
       alert(error.message || 'Could not find song or connect to server. Make sure FastAPI is running on port 8000.');
@@ -118,10 +127,19 @@ export default function Home() {
     setSongName(`${suggestion.name} - ${suggestion.artist}`);
     setShowSuggestions(false);
   };
-
+  // Clear all states
+  const handleClear = () => {
+    setSongName("");
+    setResults(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setTopK(3);
+    setDataStructure("minheap");
+  };
+  // Main render
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <main className="w-full max-w-2xl">
+      <main className="w-full max-w-7xl">
         {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold text-purple-600 dark:text-purple-400 mb-4">
@@ -132,9 +150,29 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Search Box */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 mb-8">
+        <div className="flex gap-6 mb-8">
+          {/* Search Box */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 flex-1">
           <div>
+            {/* Top K Slider */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Number of Recommendations: <span className="text-purple-600 dark:text-purple-400 font-bold">{topK}</span>
+              </label>
+              <input
+                type="range"
+                min="3"
+                max="30"
+                value={topK}
+                onChange={(e) => setTopK(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-purple-600"
+              />
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>3</span>
+                <span>30</span>
+              </div>
+            </div>
+
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Enter a song name
             </label>
@@ -224,11 +262,42 @@ export default function Home() {
               {/* Info text about selected algorithm */}
               <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
                 {dataStructure === "minheap" 
-                  ? "MinHeap maintains top-k items efficiently with minimal memory usage"
-                  : "HashTable provides faster retrieval by bucketing similarity scores"}
+                  ? "For lower k values (less recommendations), O(minHeap) < O(HashTable)"
+                  : "For higher k values (more recommendations), O(HashTable) < O(minHeap)"}
               </p>
             </div>
           </div>
+        </div>
+
+          {/* Execution Time Box */}
+          {results && results.executionTime !== undefined && (
+            <div className="bg-purple-600 dark:bg-purple-700 rounded-2xl shadow-xl p-8 w-80">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  Execution Time
+                </h3>
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-6 mb-4">
+                  <div className="text-4xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+                    {results.executionTime.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    milliseconds
+                  </div>
+                </div>
+                <div className="text-sm text-white opacity-90 mb-4">
+                  {results.dataStructure === "hashtable"
+                    ? "Time taken by HashTable"
+                    : "Time taken by MinHeap"}
+                </div>
+                <button
+                  onClick={handleClear}
+                  className="w-full px-4 py-2 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-400 font-semibold rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Clear Results
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Results */}
